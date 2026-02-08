@@ -9,15 +9,15 @@
 - 增加可注入 `ws_factory` 以便单元测试模拟网关收发，降低耦合。
 
 ## 代码结构与职责划分
-- `openclaw_gateway_adapter/env.py`
+- `openclaw_webchat_adapter/env.py`
   - 负责解析/加载 `.env`，不引入第三方 dotenv 依赖。
-- `openclaw_gateway_adapter/config.py`
+- `openclaw_webchat_adapter/config.py`
   - 定义 `AdapterSettings`，统一读取并校验环境变量（含鉴权字段存在性校验）。
-- `openclaw_gateway_adapter/exceptions.py`
+- `openclaw_webchat_adapter/exceptions.py`
   - 定义适配器对外抛出的异常类型，便于上层调用方精确捕获与处理。
-- `openclaw_gateway_adapter/ws_adapter.py`
+- `openclaw_webchat_adapter/ws_adapter.py`
   - 协议适配核心：握手（connect.challenge -> connect -> hello-ok）、RPC request/response pending 映射、chat 事件路由与增量拼接输出。
-- `openclaw_gateway_adapter/__main__.py`
+- `openclaw_webchat_adapter/__main__.py`
   - 提供最小 CLI：用于快速验证连通性与流式输出效果。
 
 ## 关键设计点
@@ -73,7 +73,7 @@ pip install -r requirements.txt
 
 ### 方式 A：代码调用（推荐集成）
 ```python
-from openclaw_gateway_adapter import AdapterSettings, OpenClawGatewayWsAdapter
+from openclaw_webchat_adapter import AdapterSettings, OpenClawGatewayWsAdapter
 
 settings = AdapterSettings.from_env(dotenv_path=".env")
 adapter = OpenClawGatewayWsAdapter(settings=settings)
@@ -89,7 +89,7 @@ adapter.stop()
 
 ### 方式 B：命令行快速验证
 ```bash
-python -m openclaw_gateway_adapter --once "你好"
+python -m openclaw_webchat_adapter --once "你好"
 ```
 
 ## 安全性说明

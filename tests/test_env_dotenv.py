@@ -15,7 +15,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from openclaw_gateway_adapter.env import load_dotenv, parse_dotenv_text
+from openclaw_webchat_adapter.env import load_dotenv, parse_dotenv_text
 
 
 @contextlib.contextmanager
@@ -83,4 +83,3 @@ class TestLoadDotenv(unittest.TestCase):
                 self.assertEqual(os.environ.get("X"), "from_dotenv")
                 self.assertEqual(result.loaded_count, 1)
                 self.assertEqual(result.skipped_count, 0)
-

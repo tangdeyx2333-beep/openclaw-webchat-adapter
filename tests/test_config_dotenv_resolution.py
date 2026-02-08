@@ -16,8 +16,8 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-import openclaw_gateway_adapter.config as config_mod
-from openclaw_gateway_adapter.config import AdapterSettings, _resolve_dotenv_path
+import openclaw_webchat_adapter.config as config_mod
+from openclaw_webchat_adapter.config import AdapterSettings, _resolve_dotenv_path
 
 
 @contextlib.contextmanager
@@ -55,7 +55,7 @@ class TestDotenvPathResolution(unittest.TestCase):
             project_root = Path(td)
             (project_root / ".env").write_text("OPENCLAW_GATEWAY_TOKEN=abc\n", encoding="utf-8")
 
-            fake_config_path = project_root / "src" / "openclaw_gateway_adapter" / "config.py"
+            fake_config_path = project_root / "src" / "openclaw_webchat_adapter" / "config.py"
             fake_config_path.parent.mkdir(parents=True, exist_ok=True)
             fake_config_path.write_text("# placeholder\n", encoding="utf-8")
 
@@ -74,7 +74,7 @@ class TestDotenvPathResolution(unittest.TestCase):
             project_root = Path(td)
             (project_root / ".env").write_text("OPENCLAW_GATEWAY_TOKEN=from_dotenv\n", encoding="utf-8")
 
-            fake_config_path = project_root / "src" / "openclaw_gateway_adapter" / "config.py"
+            fake_config_path = project_root / "src" / "openclaw_webchat_adapter" / "config.py"
             fake_config_path.parent.mkdir(parents=True, exist_ok=True)
             fake_config_path.write_text("# placeholder\n", encoding="utf-8")
 

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.18,<1.28"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openclaw_webchat_adapter" # 修正了 webcaht -> webchat
+version = "0.0.3"
+authors = [
+  { name="hadage", email="tangdeyx2333@gmail.com" },
+]
+description = "让你的项目更加简单的嵌入openclaw"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License", # 增加详细分类
+    "Operating System :: OS Independent",
+]
+# 修正 License 写法
+license = {text = "MIT"}
+
+# ！！！注意：如果你有依赖库，请取消下面两行的注释并填写
+# dependencies = [
+#     "some-package>=1.0.0",
+# ]
+
+[project.urls]
+Homepage = "https://github.com/tangdeyx2333-beep/openclaw-websocket-adapter"
+Issues = "https://github.com/tangdeyx2333-beep/openclaw-websocket-adapter/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openclaw_webchat_adapter"]

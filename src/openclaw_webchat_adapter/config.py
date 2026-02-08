@@ -164,4 +164,3 @@ class AdapterSettings:
             role=role,
             scopes_csv=scopes_csv,
         )
-

@@ -5,6 +5,8 @@
 - `.env` 文本解析：注释/空行/非法行处理，键值解析与引号剥离。
 - `.env` 加载策略：`override=False` 时跳过已存在环境变量，`override=True` 时覆盖。
 - `AdapterSettings.from_env()`：在 cwd 为 `src/` 时仍能加载到项目根目录下的 `.env`。
+- `OpenClawGatewayWsAdapter.create_connected()`：在注入 FakeWebSocket 的情况下完成握手与 sessions.patch。
+- `OpenClawGatewayWsAdapter.create_connected_from_env()`：从临时 `.env` 读取配置并连接，并验证显式覆盖 url/token/password 的行为。
 
 ## 测试用例清单（输入 / 预期输出）
 - `TestDotenvPathResolution.test_resolve_dotenv_from_src_workdir_finds_project_root`
@@ -22,10 +24,18 @@
 - `TestLoadDotenv.test_load_dotenv_override_overwrites`
   - 输入：`override=True`，且环境中已有同名 key
   - 预期：环境变量被 `.env` 覆盖；返回结果中 `loaded_count` 正确
+- `TestCreateConnected.test_create_connected_performs_handshake_and_ensures_session`
+  - 输入：注入 FakeWebSocket，并调用 `create_connected()`
+  - 预期：成功收到 hello-ok 且会话准备流程可执行（sessions.patch 有响应）
+- `TestCreateConnected.test_create_connected_from_env_reads_dotenv_and_connects`
+  - 输入：临时 `.env` 提供网关 URL，并调用 `create_connected_from_env()`
+  - 预期：适配器使用 `.env` 中的 URL 建立连接并完成握手与会话准备
+- `TestCreateConnected.test_create_connected_from_env_allows_url_token_password_overrides`
+  - 输入：临时 `.env` 提供默认值，同时显式传入 url/token/password 覆盖，并调用 `create_connected_from_env()`
+  - 预期：显式传入的覆盖值优先生效，且能正常完成握手与会话准备
 
 ## 执行方式
 - 命令：`python -m unittest discover -s tests -v`
 
 ## 自检通过声明
-- 已本地执行上述命令，全部 5 条用例通过（OK）。
-
+- 已本地执行上述命令，全部 8 条用例通过（OK）。

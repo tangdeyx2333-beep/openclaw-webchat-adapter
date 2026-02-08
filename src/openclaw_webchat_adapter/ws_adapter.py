@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import queue
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from .config import AdapterSettings
+
 from .exceptions import (
     ChatFailedError,
     ChatTimeoutError,
@@ -20,6 +22,7 @@ from .exceptions import (
     RequestTimeoutError,
 )
 
+_logger = logging.getLogger(__name__)
 
 def _uuid() -> str:
     """生成一个 UUID4 字符串，用于 requestId 与 runId。
@@ -67,8 +70,103 @@ class DeviceIdentityPlaceholder:
 WsFactory = Callable[..., Any]
 
 
-class OpenClawGatewayWsAdapter:
+class OpenClawChatWsAdapter:
     """通过 WebSocket 连接 OpenClaw Gateway，并提供流式聊天 API。"""
+
+    @classmethod
+    def create_connected(
+        cls,
+        settings: AdapterSettings,
+        ensure_session_key: str = "main",
+        timeout_s: float = 12.0,
+        device: Optional[DeviceIdentityPlaceholder] = None,
+        ws_factory: Optional[WsFactory] = None,
+    ) -> "OpenClawGatewayWsAdapter":
+        """创建适配器实例并在返回前完成握手与会话准备。
+
+        Args:
+            settings: 连接与握手配置。
+            ensure_session_key: 启动后用于 sessions.patch 的会话 key。
+            timeout_s: 等待 hello-ok 的最大秒数。
+            device: 可选的设备身份占位信息，用于未来签名式 connect。
+            ws_factory: 可选的 WebSocketApp 工厂，用于测试/依赖注入。
+
+        Returns:
+            已完成握手并确保会话可发送的适配器实例。
+
+        Raises:
+            GatewayClosedError: 当握手完成前网关连接被关闭时抛出。
+            RequestTimeoutError: 当超时仍未收到 hello-ok 时抛出。
+            RuntimeError: 当底层 WS 出错或依赖缺失时抛出。
+        """
+
+        adapter = cls(settings=settings, device=device, ws_factory=ws_factory)
+        hello = adapter.start(timeout_s=timeout_s)
+        server = hello.get("server") if isinstance(hello, dict) else None
+        conn_id = server.get("connId") if isinstance(server, dict) else None
+        protocol = hello.get("protocol") if isinstance(hello, dict) else None
+        _logger.warning("已连接 OpenClaw Gateway：url=%s protocol=%s connId=%s", settings.url, protocol, conn_id)
+        adapter.ensure_session(ensure_session_key)
+        _logger.warning("会话已就绪：session=%s sendPolicy=allow", ensure_session_key)
+        return adapter
+
+    @classmethod
+    def create_connected_from_env(
+        cls,
+        token: Optional[str] = None,
+        password: Optional[str] = None,
+        url: Optional[str] = None,
+        dotenv_path: str = ".env",
+        dotenv_override: bool = False,
+        ensure_session_key: str = "main",
+        timeout_s: float = 12.0,
+        device: Optional[DeviceIdentityPlaceholder] = None,
+        ws_factory: Optional[WsFactory] = None,
+    ) -> "OpenClawGatewayWsAdapter":
+        """从 .env / 环境变量加载配置并建立连接，返回已就绪的适配器实例。
+
+        Args:
+            token: 显式传入的网关鉴权 token；若为 None 则使用环境变量/`.env` 的值。
+            password: 显式传入的网关鉴权 password；若为 None 则使用环境变量/`.env` 的值。
+            url: 显式传入的网关 WebSocket URL；若为 None 则使用环境变量/`.env` 的值。
+            dotenv_path: `.env` 文件路径；文件不存在时仅读取 `os.environ`。
+            dotenv_override: `.env` 中的值是否覆盖 `os.environ` 中已存在的同名变量。
+            ensure_session_key: 启动后用于 sessions.patch 的会话 key。
+            timeout_s: 等待 hello-ok 的最大秒数。
+            device: 可选的设备身份占位信息，用于未来签名式 connect。
+            ws_factory: 可选的 WebSocketApp 工厂，用于测试/依赖注入。
+
+        Returns:
+            已完成握手并确保会话可发送的适配器实例。
+        """
+
+        def _normalize_optional(value: Optional[str]) -> Optional[str]:
+            if value is None:
+                return None
+            stripped = str(value).strip()
+            return stripped or None
+
+        settings = AdapterSettings.from_env(dotenv_path=dotenv_path, dotenv_override=dotenv_override)
+
+        url = _normalize_optional(url)
+        token = _normalize_optional(token)
+        password = _normalize_optional(password)
+
+        if url is not None or token is not None or password is not None:
+            settings = replace(
+                settings,
+                url=url if url is not None else settings.url,
+                token=token if token is not None else settings.token,
+                password=password if password is not None else settings.password,
+            )
+
+        return cls.create_connected(
+            settings=settings,
+            ensure_session_key=ensure_session_key,
+            timeout_s=timeout_s,
+            device=device,
+            ws_factory=ws_factory,
+        )
 
     def __init__(
         self,
@@ -443,7 +541,7 @@ class OpenClawGatewayWsAdapter:
 
         payload = frame.get("payload")
         if isinstance(payload, dict) and payload.get("type") == "hello-ok":
-            print("Hello Developer!")
+            _logger.debug("收到 hello-ok，握手完成。")
             self._hello_payload = payload
             self._hello_ok.set()
             return
@@ -463,4 +561,3 @@ class OpenClawGatewayWsAdapter:
         """在 WebSocket 关闭时标记适配器已关闭。"""
 
         self._closed.set()
-

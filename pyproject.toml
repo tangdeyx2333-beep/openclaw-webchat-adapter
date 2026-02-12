@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openclaw_webchat_adapter" # 修正了 webcaht -> webchat
-version = "0.0.3"
+version = "0.0.4"
 authors = [
   { name="hadage", email="tangdeyx2333@gmail.com" },
 ]
@@ -25,8 +25,8 @@ license = {text = "MIT"}
 # ]
 
 [project.urls]
-Homepage = "https://github.com/tangdeyx2333-beep/openclaw-websocket-adapter"
-Issues = "https://github.com/tangdeyx2333-beep/openclaw-websocket-adapter/issues"
+Homepage = "https://github.com/tangdeyx2333-beep/openclaw-webchat-adapter"
+Issues = "https://github.com/tangdeyx2333-beep/openclaw-webchat-adapter/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openclaw_webchat_adapter"]

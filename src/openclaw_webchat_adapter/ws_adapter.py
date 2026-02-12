@@ -66,8 +66,54 @@ class DeviceIdentityPlaceholder:
     signed_at: int
     nonce: Optional[str] = None
 
+@dataclass(frozen=True)
+class ChatContentItem:
+    type: str
+    text: str
 
-WsFactory = Callable[..., Any]
+@dataclass(frozen=True)
+class ChatUsageCost:
+    input: int
+    output: int
+    cacheRead: int
+    cacheWrite: int
+    total: int
+
+@dataclass(frozen=True)
+class ChatUsage:
+    input: int
+    output: int
+    cacheRead: int
+    cacheWrite: int
+    totalTokens: int
+    cost: ChatUsageCost
+
+@dataclass(frozen=True)
+class ChatMessage:
+    role: str
+    content: List[ChatContentItem]
+    timestamp: int
+    api: Optional[str] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    usage: Optional[ChatUsage] = None
+    stop_reason: Optional[str] = None
+
+@dataclass(frozen=True)
+class ChatMessage_Simple:
+    role: str
+    content: List[ChatContentItem]
+    timestamp: int
+
+
+@dataclass(frozen=True)
+class ChatHistory:
+    session_key: str
+    session_id: str
+    messages: List[ChatMessage]
+    thinking_level: Optional[str] = None
+
+
 
 
 class OpenClawChatWsAdapter:
@@ -333,6 +379,111 @@ class OpenClawChatWsAdapter:
         if not isinstance(key, str) or not key.strip():
             raise ValueError("key must be a non-empty string")
         return self.request("sessions.patch", {"key": key, "sendPolicy": "allow"}, timeout_s=timeout_s)
+
+    def get_chat_history_simple(
+            self,
+            session_key: Optional[str] = None,
+    ) -> List[ChatMessage_Simple]:
+        """获取指定会话的历史聊天数据（返回简化的消息列表，只包含role和content）。
+        
+        Args:
+            session_key: 会话标识符，默认使用配置中的session_key
+            
+        Returns:
+            List[ChatMessage_Simple]: 包含简化消息对象的列表
+        """
+        full_history = self.get_chat_history(session_key)
+        return [
+            ChatMessage_Simple(
+                role=msg.role,
+                content=msg.content,
+                timestamp=msg.timestamp
+            )
+            for msg in full_history.messages
+        ]
+
+
+    def get_chat_history(
+        self,
+        session_key: str,
+        limit: int = 200,
+        timeout_s: float = 15.0,
+    ) -> ChatHistory:
+        if session_key is not None and (not isinstance(session_key, str) or not session_key.strip()):
+            raise ValueError("session_key must be a non-empty string or None")
+        if not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        params = {
+            "sessionKey": session_key or self._settings.session_key,
+            "limit": limit,
+        }
+        payload = self.request("chat.history", params, timeout_s=timeout_s)
+        return self._map_chat_history_payload(payload)
+
+    def _map_chat_history_payload(self, payload: Dict[str, Any]) -> ChatHistory:
+        sk = payload.get("sessionKey")
+        sid = payload.get("sessionId")
+        tl = payload.get("thinkingLevel")
+        msgs_raw = payload.get("messages") or []
+        msgs: List[ChatMessage] = []
+        if isinstance(msgs_raw, list):
+            for m in msgs_raw:
+                if not isinstance(m, dict):
+                    continue
+                role = m.get("role")
+                ts = m.get("timestamp")
+                contents: List[ChatContentItem] = []
+                content_raw = m.get("content") or []
+                if isinstance(content_raw, list):
+                    for c in content_raw:
+                        if isinstance(c, dict):
+                            t = c.get("type")
+                            tx = c.get("text")
+                            if isinstance(t, str) and isinstance(tx, str):
+                                contents.append(ChatContentItem(type=t, text=tx))
+                api = m.get("api")
+                provider = m.get("provider")
+                model = m.get("model")
+                usage_obj = None
+                usage_raw = m.get("usage")
+                if isinstance(usage_raw, dict):
+                    cost_raw = usage_raw.get("cost")
+                    if isinstance(cost_raw, dict):
+                        cost = ChatUsageCost(
+                            input=cost_raw.get("input", 0),
+                            output=cost_raw.get("output", 0),
+                            cacheRead=cost_raw.get("cacheRead", 0),
+                            cacheWrite=cost_raw.get("cacheWrite", 0),
+                            total=cost_raw.get("total", 0),
+                        )
+                        usage_obj = ChatUsage(
+                            input=usage_raw.get("input", 0),
+                            output=usage_raw.get("output", 0),
+                            cacheRead=usage_raw.get("cacheRead", 0),
+                            cacheWrite=usage_raw.get("cacheWrite", 0),
+                            totalTokens=usage_raw.get("totalTokens", 0),
+                            cost=cost,
+                        )
+                stop_reason = m.get("stopReason")
+                if isinstance(role, str) and isinstance(ts, int):
+                    msgs.append(
+                        ChatMessage(
+                            role=role,
+                            content=contents,
+                            timestamp=ts,
+                            api=api if isinstance(api, str) else None,
+                            provider=provider if isinstance(provider, str) else None,
+                            model=model if isinstance(model, str) else None,
+                            usage=usage_obj,
+                            stop_reason=stop_reason if isinstance(stop_reason, str) else None,
+                        )
+                    )
+        return ChatHistory(
+            session_key=sk if isinstance(sk, str) else "",
+            session_id=sid if isinstance(sid, str) else "",
+            messages=msgs,
+            thinking_level=tl if isinstance(tl, str) else None,
+        )
 
     def stream_chat(self, user_request: str, timeout_s: float = 120.0) -> Iterator[str]:
         """针对用户输入流式产出 assistant 的增量文本片段。

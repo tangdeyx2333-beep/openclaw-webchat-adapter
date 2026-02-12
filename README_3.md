@@ -38,7 +38,7 @@
 }
 ```
 
-说明（更正）：
+说明：
 - 这条 event 对“token-only 连接是否能握手成功”通常不是决定性因素，但 **nonce 会在第二阶段 device 签名里用到**（远程连接尤其重要）。
 
 4. 客户端发送第一条请求 `connect`（req），用于握手 + 权限验证：
@@ -135,5 +135,94 @@
 
 8) 通过这几步就完成了建立 websocket 连接并和 openclaw 交流
 
+9. 客户端获取聊天历史 `chat.history`（req）格式：
+
+请求格式：
+```json
+{
+  "type": "req",
+  "id": "9562ea9d-fe01-4ef3-9432-d729c6cc1820",
+  "method": "chat.history",
+  "params": {
+    "sessionKey": "agent:main:main",
+    "limit": 200
+  }
+}
+```
+响应格式
+```json
+{
+  "sessionKey": "agent:main:main",
+  "sessionId": "85647085-3d1c-42d9-8563-5185a2575c9a",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "nihao"
+        }
+      ],
+      "timestamp": 1770794234304
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Hey. I just came online. Who am I? Who are you? [[reply_to_current]]"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "qwen-portal",
+      "model": "coder-model",
+      "usage": {
+        "input": 15004,
+        "output": 20,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "totalTokens": 15536,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1770794234312
+    }
+  ],
+  "thinkingLevel": "off"
+}
+```
+响应格式 simple
+```json
+[
+  {
+    "role": "user",
+    "content": [
+      {
+        "type": "text",
+        "text": "nihao"
+      }
+    ],
+    "timestamp": 1770794234304
+  },
+  {
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Hey. I just came online. Who am I? Who are you? [[reply_to_current]]"
+      }
+    ],
+    "timestamp": 1770794234312
+  }
+]
+```
 
 
+
+  

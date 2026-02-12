@@ -4,6 +4,10 @@
 
 这是一个可复用的 Python 包：基于 OpenClaw Gateway 的 WebSocket 协议完成握手与 RPC 调用，并提供开箱即用的流式聊天接口（chat.send + event=chat）。
 
+## 0.0.4 更新
+1. 新增了获取历史聊天记录接口，get_chat_history,get_chat_history_simple 
+2. 将接口封装到了api.cilent.OpenClawWebChatAPI中 
+
 ## 如何工作（简版）
 
 ```text

@@ -2,6 +2,77 @@
 
 一个最小可运行的 WebSocket 客户端示例：连接 OpenClaw Gateway，完成握手（connect / hello-ok），然后调用 `health` 或进入 `chat.send` 的交互式聊天。
 
+## chat.history（历史消息查询）
+
+- 请求示例：
+
+```json
+{
+  "type": "req",
+  "id": "9562ea9d-fe01-4ef3-9432-d729c6cc1820",
+  "method": "chat.history",
+  "params": {
+    "sessionKey": "agent:main:main",
+    "limit": 200
+  }
+}
+```
+
+- 响应示例：
+
+```json
+{
+  "sessionKey": "agent:main:main",
+  "sessionId": "85647085-3d1c-42d9-8563-5185a2575c9a",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "nihao"
+        }
+      ],
+      "timestamp": 1770794234304
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Hey. I just came online. Who am I? Who are you? [[reply_to_current]]"
+        }
+      ],
+      "api": "openai-completions",
+      "provider": "qwen-portal",
+      "model": "coder-model",
+      "usage": {
+        "input": 15004,
+        "output": 20,
+        "cacheRead": 512,
+        "cacheWrite": 0,
+        "totalTokens": 15536,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1770794234312
+    }
+  ],
+  "thinkingLevel": "off"
+}
+```
+
+### 封装与方法完善
+- 请求封装：仅使用 sessionKey 与 limit 两个参数。
+- 响应封装：返回结构化对象，包含 sessionKey、sessionId、messages（role、content[type/text]、timestamp、可选 api/provider/model/usage/stopReason）与 thinkingLevel。
+- 方法行为：get_chat_history 返回封装后的响应对象并执行严格参数校验，遵循字段白名单。
+
 ## 使用方式
 
 1. 复制 `src/ws-openclaw-client/.env.example` 为 `src/ws-openclaw-client/.env`

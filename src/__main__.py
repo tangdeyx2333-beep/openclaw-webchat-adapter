@@ -4,7 +4,7 @@ from openclaw_webchat_adapter.ws_adapter import OpenClawChatWsAdapter as adapter
 from openclaw_webchat_adapter.api.client import OpenClawWebChatAPI as client
 def main() -> int:
     """基于 .env 配置启动交互式 REPL 或执行一次性请求。"""
-    connect1 = client.create_connected_from_env()
+    # connect1 = client.create_connected_from_env()
     connect = adapter.create_connected_from_env()
     try:
         # while True:

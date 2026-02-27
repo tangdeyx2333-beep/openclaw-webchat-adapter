@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openclaw_webchat_adapter" # 修正了 webcaht -> webchat
-version = "0.0.4"
+version = "0.0.6"
 authors = [
   { name="hadage", email="tangdeyx2333@gmail.com" },
 ]
@@ -19,10 +19,11 @@ classifiers = [
 # 修正 License 写法
 license = {text = "MIT"}
 
-# ！！！注意：如果你有依赖库，请取消下面两行的注释并填写
-# dependencies = [
-#     "some-package>=1.0.0",
-# ]
+# 添加实际需要的依赖包
+dependencies = [
+    "websocket-client>=1.7.0",
+    "python-dotenv"
+]
 
 [project.urls]
 Homepage = "https://github.com/tangdeyx2333-beep/openclaw-webchat-adapter"

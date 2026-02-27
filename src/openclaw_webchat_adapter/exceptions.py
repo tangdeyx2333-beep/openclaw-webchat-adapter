@@ -34,3 +34,7 @@ class ChatTimeoutError(OpenClawGatewayError):
 class ChatFailedError(OpenClawGatewayError):
     """表示一次对话以 error/aborted 状态结束。"""
 
+
+class ResourceLimitError(OpenClawGatewayError):
+    """表示资源限制被触发（如队列大小超限）。"""
+

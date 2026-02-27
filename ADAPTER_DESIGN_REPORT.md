@@ -5,7 +5,7 @@
 ## 修改摘要
 - 将原先单文件的 WebSocket 适配器拆分为可复用的包：配置加载、.env 解析、协议适配、异常定义、CLI 入口分离。
 - 新增统一配置入口 `AdapterSettings.from_env()`：从 `.env` 或系统环境变量读取 `token/password` 用于网关鉴权。
-- 对外提供核心流式接口 `OpenClawGatewayWsAdapter.stream_chat(user_request)`：按 runId 订阅 chat 事件并增量输出。
+- 对外提供核心流式接口 `OpenClawChatWsAdapter.stream_chat(user_request)`：按 runId 订阅 chat 事件并增量输出。
 - 增加可注入 `ws_factory` 以便单元测试模拟网关收发，降低耦合。
 
 ## 代码结构与职责划分
@@ -73,10 +73,10 @@ pip install -r requirements.txt
 
 ### 方式 A：代码调用（推荐集成）
 ```python
-from openclaw_webchat_adapter import AdapterSettings, OpenClawGatewayWsAdapter
+from openclaw_webchat_adapter import AdapterSettings, OpenClawChatWsAdapter
 
 settings = AdapterSettings.from_env(dotenv_path=".env")
-adapter = OpenClawGatewayWsAdapter(settings=settings)
+adapter = OpenClawChatWsAdapter(settings=settings)
 
 adapter.start()
 adapter.ensure_session("main")

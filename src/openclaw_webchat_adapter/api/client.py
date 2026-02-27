@@ -5,7 +5,7 @@ import time
 from typing import Any, Dict, Iterator, List, Optional
 from ..ws_adapter import (
     OpenClawChatWsAdapter,
-    DeviceIdentityPlaceholder,
+    DeviceIdentity,
     ChatHistory,
     ChatContentItem,
     ChatMessage,
@@ -42,7 +42,7 @@ class OpenClawWebChatAPI:
         dotenv_override: bool = False,
         ensure_session_key: str = "main",
         timeout_s: float = 12.0,
-        device: Optional[DeviceIdentityPlaceholder] = None,
+        device: Optional[DeviceIdentity] = None,
     ) -> OpenClawWebChatAPI:
         """从 .env / 环境变量加载配置并建立连接，返回已就绪的 API 实例。
 
@@ -63,8 +63,6 @@ class OpenClawWebChatAPI:
             token=token,
             password=password,
             url=url,
-            dotenv_path=dotenv_path,
-            dotenv_override=dotenv_override,
             ensure_session_key=ensure_session_key,
             timeout_s=timeout_s,
             device=device

@@ -19,7 +19,8 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from openclaw_webchat_adapter.config import AdapterSettings
-from openclaw_webchat_adapter.ws_adapter import OpenClawGatewayWsAdapter
+from openclaw_webchat_adapter.exceptions import ConfigurationError
+from openclaw_webchat_adapter.ws_adapter import OpenClawChatWsAdapter
 
 
 class _FakeWebSocketApp:
@@ -100,7 +101,7 @@ def _fake_ws_factory(url: str, **kwargs: Any) -> _FakeWebSocketApp:
 class TestCreateConnected(unittest.TestCase):
     def test_create_connected_performs_handshake_and_ensures_session(self) -> None:
         settings = AdapterSettings(url="ws://example", session_key="agent:main:main")
-        adapter = OpenClawGatewayWsAdapter.create_connected(
+        adapter = OpenClawChatWsAdapter.create_connected(
             settings=settings,
             ensure_session_key="main",
             timeout_s=2.0,
@@ -119,6 +120,7 @@ class TestCreateConnected(unittest.TestCase):
                 "\n".join(
                     [
                         "OPENCLAW_GATEWAY_URL=ws://from-dotenv",
+                        "OPENCLAW_GATEWAY_TOKEN=dotenv-token",
                         "OPENCLAW_SESSION_KEY=agent:main:main",
                         "",
                     ]
@@ -126,7 +128,7 @@ class TestCreateConnected(unittest.TestCase):
                 encoding="utf-8",
             )
             with patch.dict(os.environ, {}, clear=True):
-                adapter = OpenClawGatewayWsAdapter.create_connected_from_env(
+                adapter = OpenClawChatWsAdapter.create_connected_from_env(
                     dotenv_path=str(dotenv_path),
                     dotenv_override=True,
                     timeout_s=2.0,
@@ -138,6 +140,21 @@ class TestCreateConnected(unittest.TestCase):
                     self.assertEqual(adapter._ws.url, "ws://from-dotenv")
                 finally:
                     adapter.stop()
+
+    def test_create_connected_from_env_raises_configuration_error_when_auth_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dotenv_path = Path(temp_dir) / ".env"
+            dotenv_path.write_text(
+                "OPENCLAW_GATEWAY_URL=ws://no-auth\nOPENCLAW_SESSION_KEY=agent:main:main",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaises(ConfigurationError):
+                    OpenClawChatWsAdapter.create_connected_from_env(
+                        dotenv_path=str(dotenv_path),
+                        dotenv_override=True,
+                        ws_factory=_fake_ws_factory,
+                    )
 
     def test_create_connected_from_env_allows_url_token_password_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -155,7 +172,7 @@ class TestCreateConnected(unittest.TestCase):
                 encoding="utf-8",
             )
             with patch.dict(os.environ, {}, clear=True):
-                adapter = OpenClawGatewayWsAdapter.create_connected_from_env(
+                adapter = OpenClawChatWsAdapter.create_connected_from_env(
                     url="ws://override",
                     token="override-token",
                     password="override-pass",

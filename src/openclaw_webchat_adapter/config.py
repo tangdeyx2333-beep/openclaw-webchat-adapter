@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Optional
 
-from .env import load_dotenv
 from .exceptions import ConfigurationError
+from dotenv import load_dotenv
 
+_logger = logging.getLogger(__name__)
 
 def _require_non_empty(value: Optional[str], name: str) -> str:
     """校验配置项存在且非空，并返回清洗后的字符串。
@@ -100,18 +102,15 @@ class AdapterSettings:
 
     protocol_version: int = 3
     role: str = "operator"
-    scopes_csv: str = "operator.admin"
+    scopes_csv: str = "operator.admin,operator.approvals,operator.pairing"
+    device_key_file: Optional[str] = ".device.key"
     connect_fallback_delay_s: float = 0.75
     handshake_poll_interval_s: float = 0.01
     chat_poll_interval_s: float = 0.2
 
     @classmethod
-    def from_env(cls, dotenv_path: str = ".env", dotenv_override: bool = False) -> "AdapterSettings":
-        """从环境变量与可选的 .env 文件加载配置并构造 AdapterSettings。
-
-        Args:
-            dotenv_path: .env 文件路径。若文件不存在，则仅读取 os.environ。
-            dotenv_override: .env 中的值是否覆盖 os.environ 中已存在的同名变量。
+    def from_env(cls) -> "AdapterSettings":
+        """从环境变量.env文件加载配置并构造 AdapterSettings。
 
         Returns:
             AdapterSettings 实例。
@@ -120,8 +119,7 @@ class AdapterSettings:
             ConfigurationError: 当必需配置项缺失或格式不合法时抛出。
         """
 
-        resolved_dotenv_path = _resolve_dotenv_path(dotenv_path)
-        load_dotenv(path=resolved_dotenv_path, override=dotenv_override)
+        load_dotenv()
 
         url = os.getenv("OPENCLAW_GATEWAY_URL") or cls.url
         token = os.getenv("OPENCLAW_GATEWAY_TOKEN") or None
@@ -129,7 +127,9 @@ class AdapterSettings:
         session_key = os.getenv("OPENCLAW_SESSION_KEY") or cls.session_key
 
         protocol_version_raw = os.getenv("OPENCLAW_PROTOCOL_VERSION")
+
         protocol_version = cls.protocol_version
+
         if protocol_version_raw and protocol_version_raw.strip():
             try:
                 protocol_version = int(protocol_version_raw)
@@ -145,9 +145,16 @@ class AdapterSettings:
 
         role = os.getenv("OPENCLAW_CONNECT_ROLE") or cls.role
         scopes_csv = os.getenv("OPENCLAW_CONNECT_SCOPES") or cls.scopes_csv
+        device_key_file = os.getenv("OPENCLAW_DEVICE_KEY_FILE") or cls.device_key_file
 
         url = _require_non_empty(url, "OPENCLAW_GATEWAY_URL")
         session_key = _require_non_empty(session_key, "OPENCLAW_SESSION_KEY")
+        _logger.warning(f"""读取到的配置: 
+        [必须]:
+        url={url}, token={token}, password={password}, session_key={session_key}, protocol_version_raw={protocol_version_raw},
+        [其他可选]:
+        protocol_version={protocol_version}, client_id={client_id}, client_mode={client_mode}, client_display_name={client_display_name},
+        client_version={client_version}, platform={platform}, instance_id={instance_id}, role={role}, scopes_csv={scopes_csv}""")
 
         return cls(
             url=url,
@@ -163,4 +170,5 @@ class AdapterSettings:
             protocol_version=protocol_version,
             role=role,
             scopes_csv=scopes_csv,
+            device_key_file=device_key_file,
         )

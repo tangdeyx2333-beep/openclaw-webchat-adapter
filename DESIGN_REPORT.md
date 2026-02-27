@@ -1,15 +1,35 @@
 # OpenClaw Gateway Adapter 设计文档（本次变更）
 
 ## 修改摘要
-- 修复 `OpenClawGatewayWsAdapter.create_connected()` 的类方法绑定，并新增 `create_connected_from_env()`：支持无参从 `.env`/环境变量读取并连接，也支持显式覆盖 `OPENCLAW_GATEWAY_URL/token/password`。
+- 修复 `OpenClawChatWsAdapter.create_connected()` 的类方法绑定，并新增 `create_connected_from_env()`：支持无参从 `.env`/环境变量读取并连接，也支持显式覆盖 `OPENCLAW_GATEWAY_URL/token/password`。
+- 新增 Ed25519 设备签名支持：重构 `DeviceIdentity` 结构，支持自动生成密钥对并持久化至 `.device.key`（可通过 `OPENCLAW_DEVICE_KEY_FILE` 环境变量修改，且启动时自动尝试从文件加载，若不存在则生成并保存）、计算 Device ID (SHA256) 以及对 connect 负载进行 v2 版本签名。
 - 将 `openclaw_webchat_adapter` 包内的模块/类/函数 Docstring 统一翻译为中文，提升可读性与团队协作效率（不改变任何运行逻辑）。
 - 新增 `env.py` 的解析与加载单元测试，覆盖引号处理、注释/空行跳过、override 行为等核心路径。
 - 将 CLI 的“连接/握手/会话准备”逻辑迁移到 `ws_adapter.create_connected()`，CLI 仅负责读取输入并调用聊天接口。
 - 适配器在“连接就绪/会话就绪”时输出 INFO 日志，便于启动排障与联调。
 - 新增 `TEST_REPORT.md` 作为本次交付的测试报告。
 
+## 数据结构确认
+在本次设备码签名功能的实现中，严格遵守了用户提供的数据白名单，未添加任何额外字段。确认字段如下：
+- `client_id`: 客户端唯一标识。
+- `client_mode`: 客户端模式。
+- `role`: 连接角色。
+- `scopes`: 权限范围列表。
+- `signed_at`: 签名时间戳（毫秒）。
+- `token`: 鉴权令牌。
+- `nonce`: 网关提供的随机值。
+- `id` (Device ID): 设备公钥的 SHA256 哈希。
+- `publicKey`: Base64Url 编码的 Ed25519 公钥。
+- `signature`: 使用 Ed25519 私钥对 `v2|...` 负载生成的签名。
+
+**承诺**：除上述显式要求的字段外，未在 `connect` 报文或 `device` 对象中添加任何 `uuid`, `created_time` 等通用字段。
+
 ## 架构设计思路
-该适配器以“配置加载 + 协议适配 + 异常分层”的方式拆分职责，降低耦合并便于测试：
+- **设备身份持久化**: 
+  - 通过 `DeviceIdentity` 类管理 Ed25519 密钥对。
+  - 支持 `save_to_file` 和 `load_from_file`，默认使用 `.device.key` 存储私钥原始字节（32字节）。
+  - 在 `create_connected_from_env` 中实现了“自动加载/生成”逻辑：若未提供 device 且配置了 key 文件路径，则优先加载，加载失败则生成新密钥并保存。
+- **配置解耦**: 
 - `openclaw_webchat_adapter/env.py`
   - 负责 `.env` 文本解析与写入 `os.environ`，不引入第三方依赖。
 - `openclaw_webchat_adapter/config.py`

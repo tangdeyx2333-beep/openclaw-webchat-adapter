@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import logging
 import queue
+import secrets
 import threading
 import time
-import uuid
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Iterator, List, Optional
+
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from .config import AdapterSettings
 
@@ -20,18 +24,20 @@ from .exceptions import (
     ProtocolError,
     RequestFailedError,
     RequestTimeoutError,
+    ResourceLimitError,
 )
 
 _logger = logging.getLogger(__name__)
 
+
 def _uuid() -> str:
-    """生成一个 UUID4 字符串，用于 requestId 与 runId。
+    """生成一个加密安全的随机字符串，用于 requestId 与 runId。
 
     Returns:
-        UUID4 字符串。
+        加密安全的随机字符串（URL安全的base64编码）。
     """
 
-    return str(uuid.uuid4())
+    return secrets.token_urlsafe(32)
 
 
 def _extract_chat_text(message_obj: Any) -> str:
@@ -57,19 +63,67 @@ def _extract_chat_text(message_obj: Any) -> str:
 
 
 @dataclass(frozen=True)
-class DeviceIdentityPlaceholder:
-    """表示用于未来“签名连接”的 device 身份字段占位结构。"""
+class DeviceIdentity:
+    """表示用于设备签名的身份信息。"""
 
-    id: str
-    public_key: str
-    signature: str
-    signed_at: int
+    private_key: ed25519.Ed25519PrivateKey
+    id: Optional[str] = None
+    public_key: Optional[str] = None
     nonce: Optional[str] = None
+
+    @classmethod
+    def generate(cls) -> DeviceIdentity:
+        """生成全新的 Ed25519 密钥对。"""
+        pk = ed25519.Ed25519PrivateKey.generate()
+        return cls(private_key=pk)
+
+    @classmethod
+    def from_private_key_bytes(cls, data: bytes) -> DeviceIdentity:
+        """从原始字节加载私钥。"""
+        pk = ed25519.Ed25519PrivateKey.from_private_bytes(data)
+        return cls(private_key=pk)
+
+    @property
+    def device_id(self) -> str:
+        """计算 Device ID (SHA256 of Raw Public Key)。"""
+        pub_bytes = self.private_key.public_key().public_bytes_raw()
+        return hashlib.sha256(pub_bytes).hexdigest()
+
+    @property
+    def public_key_b64(self) -> str:
+        """获取 Base64Url 编码的公钥。"""
+        pub_bytes = self.private_key.public_key().public_bytes_raw()
+        return base64.urlsafe_b64encode(pub_bytes).decode("utf-8").rstrip("=")
+
+    def sign_payload(self, payload: str) -> str:
+        """使用私钥对 payload 进行签名并返回 Base64Url 字符串。"""
+        sig_bytes = self.private_key.sign(payload.encode("utf-8"))
+        return base64.urlsafe_b64encode(sig_bytes).decode("utf-8").rstrip("=")
+
+    def save_to_file(self, file_path: str) -> None:
+        """将私钥原始字节保存到文件。"""
+        private_bytes = self.private_key.private_bytes_raw()
+        with open(file_path, "wb") as f:
+            f.write(private_bytes)
+
+    @classmethod
+    def load_from_file(cls, file_path: str) -> Optional[DeviceIdentity]:
+        """从文件加载私钥原始字节并恢复 DeviceIdentity。"""
+        import os
+        if not os.path.exists(file_path):
+            return None
+        with open(file_path, "rb") as f:
+            data = f.read()
+        if len(data) != 32:
+            return None
+        return cls.from_private_key_bytes(data)
+
 
 @dataclass(frozen=True)
 class ChatContentItem:
     type: str
     text: str
+
 
 @dataclass(frozen=True)
 class ChatUsageCost:
@@ -79,6 +133,7 @@ class ChatUsageCost:
     cacheWrite: int
     total: int
 
+
 @dataclass(frozen=True)
 class ChatUsage:
     input: int
@@ -87,6 +142,7 @@ class ChatUsage:
     cacheWrite: int
     totalTokens: int
     cost: ChatUsageCost
+
 
 @dataclass(frozen=True)
 class ChatMessage:
@@ -98,6 +154,7 @@ class ChatMessage:
     model: Optional[str] = None
     usage: Optional[ChatUsage] = None
     stop_reason: Optional[str] = None
+
 
 @dataclass(frozen=True)
 class ChatMessage_Simple:
@@ -114,6 +171,7 @@ class ChatHistory:
     thinking_level: Optional[str] = None
 
 
+WsFactory = Callable[..., Any]
 
 
 class OpenClawChatWsAdapter:
@@ -121,13 +179,13 @@ class OpenClawChatWsAdapter:
 
     @classmethod
     def create_connected(
-        cls,
-        settings: AdapterSettings,
-        ensure_session_key: str = "main",
-        timeout_s: float = 12.0,
-        device: Optional[DeviceIdentityPlaceholder] = None,
-        ws_factory: Optional[WsFactory] = None,
-    ) -> "OpenClawGatewayWsAdapter":
+            cls,
+            settings: AdapterSettings,
+            ensure_session_key: str = "main",
+            timeout_s: float = 12.0,
+            device: Optional[DeviceIdentity] = None,
+            ws_factory: Optional[WsFactory] = None,
+    ) -> "OpenClawChatWsAdapter":
         """创建适配器实例并在返回前完成握手与会话准备。
 
         Args:
@@ -158,17 +216,15 @@ class OpenClawChatWsAdapter:
 
     @classmethod
     def create_connected_from_env(
-        cls,
-        token: Optional[str] = None,
-        password: Optional[str] = None,
-        url: Optional[str] = None,
-        dotenv_path: str = ".env",
-        dotenv_override: bool = False,
-        ensure_session_key: str = "main",
-        timeout_s: float = 12.0,
-        device: Optional[DeviceIdentityPlaceholder] = None,
-        ws_factory: Optional[WsFactory] = None,
-    ) -> "OpenClawGatewayWsAdapter":
+            cls,
+            token: Optional[str] = None,
+            password: Optional[str] = None,
+            url: Optional[str] = None,
+            ensure_session_key: str = "main",
+            timeout_s: float = 12.0,
+            device: Optional[DeviceIdentity] = None,
+            ws_factory: Optional[WsFactory] = None,
+    ) -> "OpenClawChatWsAdapter":
         """从 .env / 环境变量加载配置并建立连接，返回已就绪的适配器实例。
 
         Args:
@@ -192,7 +248,7 @@ class OpenClawChatWsAdapter:
             stripped = str(value).strip()
             return stripped or None
 
-        settings = AdapterSettings.from_env(dotenv_path=dotenv_path, dotenv_override=dotenv_override)
+        settings = AdapterSettings.from_env()
 
         url = _normalize_optional(url)
         token = _normalize_optional(token)
@@ -206,19 +262,32 @@ class OpenClawChatWsAdapter:
                 password=password if password is not None else settings.password,
             )
 
+        # 自动管理设备身份持久化
+        if device is None and settings.device_key_file:
+            device = DeviceIdentity.load_from_file(settings.device_key_file)
+            if device is None:
+                device = DeviceIdentity.generate()
+                try:
+                    device.save_to_file(settings.device_key_file)
+                    _logger.info(f"已生成新的设备身份并保存至 {settings.device_key_file}")
+                except Exception as e:
+                    _logger.warning(f"保存设备身份失败: {e}")
+            else:
+                _logger.info(f"已从 {settings.device_key_file} 加载现有设备身份")
+
         return cls.create_connected(
             settings=settings,
-            ensure_session_key=ensure_session_key,
+            ensure_session_key=settings.session_key,
             timeout_s=timeout_s,
             device=device,
             ws_factory=ws_factory,
         )
 
     def __init__(
-        self,
-        settings: AdapterSettings,
-        device: Optional[DeviceIdentityPlaceholder] = None,
-        ws_factory: Optional[WsFactory] = None,
+            self,
+            settings: AdapterSettings,
+            device: Optional[DeviceIdentity] = None,
+            ws_factory: Optional[WsFactory] = None,
     ):
         """初始化适配器并准备握手相关状态。
 
@@ -241,6 +310,10 @@ class OpenClawChatWsAdapter:
         self._connect_sent = False
         self._connect_req_id: Optional[str] = None
         self._last_error: Optional[BaseException] = None
+
+        # 资源限制常量
+        self._MAX_PENDING_REQUESTS = 100
+        self._MAX_CHAT_SESSIONS = 50
 
         self._pending: Dict[str, "queue.Queue[Dict[str, Any]]"] = {}
         self._pending_lock = threading.Lock()
@@ -294,7 +367,7 @@ class OpenClawChatWsAdapter:
         self._thread = threading.Thread(target=self._ws.run_forever, daemon=True)
         self._thread.start()
 
-        deadline = time.time() + timeout_s
+        deadline = time.time() + timeout_s * 10
         while time.time() < deadline:
             if self._hello_ok.is_set():
                 return self._hello_payload or {}
@@ -343,12 +416,18 @@ class OpenClawChatWsAdapter:
         if params is not None and not isinstance(params, dict):
             raise ValueError("params must be a dict or None")
 
+        # 检查资源限制
+        with self._pending_lock:
+            if len(self._pending) >= self._MAX_PENDING_REQUESTS:
+                raise ResourceLimitError(f"Too many pending requests (max: {self._MAX_PENDING_REQUESTS})")
+
         req_id = _uuid()
         q: "queue.Queue[Dict[str, Any]]" = queue.Queue(maxsize=1)
         with self._pending_lock:
             self._pending[req_id] = q
 
-        frame = {"type": "req", "id": req_id, "method": method, "params": params or {}}
+        frame = {"type": "req", "id": req_id, "method": method, "params": params or {},
+                 }
         self._send(frame)
         try:
             res = q.get(timeout=timeout_s)
@@ -402,12 +481,11 @@ class OpenClawChatWsAdapter:
             for msg in full_history.messages
         ]
 
-
     def get_chat_history(
-        self,
-        session_key: str,
-        limit: int = 200,
-        timeout_s: float = 15.0,
+            self,
+            session_key: str,
+            limit: int = 200,
+            timeout_s: float = 15.0,
     ) -> ChatHistory:
         if session_key is not None and (not isinstance(session_key, str) or not session_key.strip()):
             raise ValueError("session_key must be a non-empty string or None")
@@ -504,6 +582,11 @@ class OpenClawChatWsAdapter:
         if not isinstance(user_request, str) or not user_request.strip():
             return iter(())
 
+        # 检查聊天会话数量限制
+        with self._chat_lock:
+            if len(self._chat_queues) >= self._MAX_CHAT_SESSIONS:
+                raise ResourceLimitError(f"Too many chat sessions (max: {self._MAX_CHAT_SESSIONS})")
+
         run_id = _uuid()
         q: "queue.Queue[Dict[str, Any]]" = queue.Queue()
         with self._chat_lock:
@@ -541,7 +624,7 @@ class OpenClawChatWsAdapter:
                 cur = _extract_chat_text(msg_obj)
                 if cur:
                     if cur.startswith(last_text):
-                        chunk = cur[len(last_text) :]
+                        chunk = cur[len(last_text):]
                     else:
                         chunk = cur
                     if chunk:
@@ -624,25 +707,44 @@ class OpenClawChatWsAdapter:
             params["auth"] = auth
 
         if self._device is not None:
-            device_obj: Dict[str, Any] = {
-                "id": self._device.id,
-                "publicKey": self._device.public_key,
-                "signature": self._device.signature,
-                "signedAt": self._device.signed_at,
+            signed_at = int(time.time() * 1000)
+            nonce = self._connect_nonce or ""
+            
+            # 这里的参数必须和 connect.params 里的完全一致！
+            # 格式: version|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce
+            scopes_str = ",".join(params["scopes"])
+            token_val = self._settings.token or ""
+            
+            payload = (
+                f"v2|{self._device.device_id}|{self._settings.client_id}|"
+                f"{self._settings.client_mode}|{self._settings.role}|"
+                f"{scopes_str}|{signed_at}|{token_val}|{nonce}"
+            )
+
+            print(f":payload {payload}")
+
+            signature = self._device.sign_payload(payload)
+            
+            print(f"connect signature: {signature}")
+
+            params["device"] = {
+                "id": self._device.device_id,
+                "publicKey": self._device.public_key_b64,
+                "signature": signature,
+                "signedAt": signed_at,
+                "nonce": nonce,
             }
-            nonce = self._device.nonce or self._connect_nonce
-            if nonce:
-                device_obj["nonce"] = nonce
-            params["device"] = device_obj
 
         frame = {"type": "req", "id": self._connect_req_id, "method": "connect", "params": params}
         self._send(frame)
 
     def _on_message(self, _ws: Any, message: str) -> None:
         """将入站帧分发到握手、等待中的 RPC 或 chat 流队列。"""
-
         try:
             frame = json.loads(message)
+            print(f"message: {frame}")
+            print(f"*" * 10)
+
         except Exception:
             return
         if not isinstance(frame, dict):
@@ -691,10 +793,12 @@ class OpenClawChatWsAdapter:
                 q.put(frame)
 
         payload = frame.get("payload")
-        if isinstance(payload, dict) and payload.get("type") == "hello-ok":
+        if (isinstance(payload, dict) and payload.get("type") == "hello-ok") or \
+           (req_id == self._connect_req_id and frame.get("ok") is True):
             _logger.debug("收到 hello-ok，握手完成。")
             self._hello_payload = payload
             self._hello_ok.set()
+            print(f"hello-ok: {frame}")
             return
 
         if req_id and req_id == self._connect_req_id and frame.get("ok") is False:

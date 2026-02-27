@@ -5,10 +5,27 @@
 - `.env` 文本解析：注释/空行/非法行处理，键值解析与引号剥离。
 - `.env` 加载策略：`override=False` 时跳过已存在环境变量，`override=True` 时覆盖。
 - `AdapterSettings.from_env()`：在 cwd 为 `src/` 时仍能加载到项目根目录下的 `.env`。
-- `OpenClawGatewayWsAdapter.create_connected()`：在注入 FakeWebSocket 的情况下完成握手与 sessions.patch。
-- `OpenClawGatewayWsAdapter.create_connected_from_env()`：从临时 `.env` 读取配置并连接，并验证显式覆盖 url/token/password 的行为。
+- `OpenClawChatWsAdapter.create_connected()`：在注入 FakeWebSocket 的情况下完成握手与 sessions.patch。
+- `OpenClawChatWsAdapter.create_connected_from_env()`：从临时 `.env` 读取配置并连接，并验证显式覆盖 url/token/password 的行为。
+- Ed25519 设备签名：验证密钥对生成、Device ID 计算、Payload 签名以及 `connect` 帧中字段的完整性。
+- 设备身份持久化：验证私钥的保存与加载逻辑，以及 `create_connected_from_env` 中的自动加载/生成逻辑。
 
 ## 测试用例清单（输入 / 预期输出）
+- `TestDeviceSigning.test_device_identity_generation`
+  - 输入：调用 `DeviceIdentity.generate()`
+  - 预期：生成有效的 Ed25519 私钥，且 `device_id` 与 `public_key_b64` 非空。
+- `TestDeviceSigning.test_device_signing_payload`
+  - 输入：给定测试 Payload
+  - 预期：生成的签名可通过公钥校验。
+- `TestDeviceSigning.test_send_connect_with_signing`
+  - 输入：配置了 `DeviceIdentity` 的适配器调用 `_send_connect()`
+  - 预期：发送的 `connect` 帧中包含正确的 `device` 对象，且字段符合 v2 签名规范。
+- `TestDeviceSigning.test_device_identity_persistence`
+  - 输入：调用 `save_to_file()` 后再调用 `load_from_file()`
+  - 预期：加载后的 `DeviceIdentity` 与原对象具有相同的 `device_id`。
+- `TestDeviceSigning.test_create_connected_from_env_auto_device_persistence`
+  - 输入：配置 `OPENCLAW_DEVICE_KEY_FILE` 但文件不存在，并调用 `create_connected_from_env()`
+  - 预期：自动生成新密钥、保存至文件、并成功使用该身份建立连接。
 - `TestDotenvPathResolution.test_resolve_dotenv_from_src_workdir_finds_project_root`
   - 输入：cwd 为 `project_root/src`，传入 `.env`
   - 预期：解析结果指向 `project_root/.env` 的绝对路径

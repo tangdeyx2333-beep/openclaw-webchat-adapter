@@ -23,7 +23,7 @@ def create_connected_from_env(
     dotenv_override: bool = False,
     ensure_session_key: str = "main",
     timeout_s: float = 12.0,
-    device: Optional[DeviceIdentityPlaceholder] = None,
+    device: Optional[DeviceIdentity] = None,
 ) -> OpenClawWebChatAPI:
 ```
 
@@ -35,7 +35,7 @@ def create_connected_from_env(
 - **dotenv_override** (`bool`, 可选): 是否用 `.env` 中的值覆盖系统环境变量。默认值为 False。
 - **ensure_session_key** (`str`, 可选): 启动后自动确保并激活的会话 Key。默认值为 "main"。
 - **timeout_s** (`float`, 可选): 连接和握手的超时时间（秒）。默认值为 12.0。
-- **device** (`Optional[DeviceIdentityPlaceholder]`, 可选): 可选的设备身份信息。
+- **device** (`Optional[DeviceIdentity]`, 可选): 可选的设备身份信息（支持 Ed25519 签名）。
 
 ##### 返回值
 - **OpenClawWebChatAPI**: 已连接并就绪的 API 实例。

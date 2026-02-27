@@ -3,7 +3,14 @@
 让你的项目更加简单的嵌入openclaw
 
 这是一个可复用的 Python 包：基于 OpenClaw Gateway 的 WebSocket 协议完成握手与 RPC 调用，并提供开箱即用的流式聊天接口（chat.send + event=chat）。
+支持连接 openclaw@2026.2.4 版本的openclaw
+## 0.0.6 更新
+1. 0.0.5有依赖bug修复了
+2. 该适配器支持openclaw@2026.2.4 之前的版本，较新版本如2.20需要deviceid，正在开发中
 
+## 0.0.5 更新
+1. 修改了读取.env的逻辑
+2. 修复了依赖下载不完全的问题
 ## 0.0.4 更新
 1. 新增了获取历史聊天记录接口，get_chat_history,get_chat_history_simple 
 2. 将接口封装到了api.cilent.OpenClawWebChatAPI中 
@@ -21,7 +28,7 @@ OpenClaw Gateway
 ```
 
 ## 特性
-- 一键连接：`OpenClawGatewayWsAdapter.create_connected()` 自动握手并准备会话
+- 一键连接：`OpenClawChatWsAdapter.create_connected()` 自动握手并准备会话
 - 配置统一：`AdapterSettings.from_env()` 从 `.env` / 环境变量读取参数
 - 流式输出：`stream_chat()` 增量产出 assistant 文本片段
 - CLI 入口：支持一次性请求与交互式 REPL，并输出连接就绪日志
@@ -31,6 +38,7 @@ OpenClaw Gateway
 
 ### 1) 安装依赖
 ```bash
+pip install websocket-client
 pip install openclaw-webchat-adapter 
 ```
 
@@ -39,7 +47,7 @@ pip install openclaw-webchat-adapter
 
 最少需要：
 - `OPENCLAW_GATEWAY_URL`
-- `OPENCLAW_SESSION_KEY`
+- `OPENCLAW_SESSION_KEY`(如果openclaw的鉴权是session)
 
 鉴权（按你的网关策略选择其一或同时提供）：
 - `OPENCLAW_GATEWAY_TOKEN`
